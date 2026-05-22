@@ -23,15 +23,16 @@ def get_produits_categorie(categorie_id):
     return res.data or []
 
 
+def boutons_menu_principal():
+    return [
+        {"id": "MENU_CATALOGUE", "titre": "🛍️ Catalogue"},
+        {"id": "MENU_LIVRAISON", "titre": "🚚 Livraison"},
+        {"id": "MENU_PANIER", "titre": "🛒 Mon panier"},
+    ]
+
+
 def menu_principal():
-    return (
-        "Bonjour ! 👋 Bienvenue chez Majoie Mercerie.\n\n"
-        "Que voulez-vous faire ?\n\n"
-        "1. Voir le catalogue\n"
-        "2. Frais de livraison\n"
-        "3. Mon panier\n\n"
-        "Tapez le numéro de votre choix."
-    )
+    return "Bonjour ! 👋 Bienvenue chez *Majoie Mercerie*.\n\nQue voulez-vous faire ?"
 
 
 def menu_categories():
@@ -60,11 +61,10 @@ def construire_page_produits(produits, page, categorie_id):
     for i, p in enumerate(produits_page, debut + 1):
         texte += f"{i}. {p['nom']} — {p['prix']} FCFA\n"
 
-    # Boutons de navigation
     boutons = []
     if a_suivant:
         boutons.append({"id": f"PAGE_SUIVANTE_{categorie_id}_{page + 1}", "titre": "➡️ Page suivante"})
-    boutons.append({"id": "VOIR_PANIER", "titre": "🛒 Mon panier"})
+    boutons.append({"id": "MENU_PANIER", "titre": "🛒 Mon panier"})
     boutons.append({"id": "RETOUR_CATEGORIES", "titre": "🔙 Catégories"})
 
     return texte, produits_page, boutons[:3]
@@ -86,8 +86,7 @@ def confirmer_commande(numero_client, panier, zone_nom, frais):
         f"Frais livraison : {frais} FCFA\n"
         f"*TOTAL : {commande['total']} FCFA*\n\n"
         f"Numéro de commande : #{commande['commande_id']}\n"
-        "Merci pour votre commande ! 🎉\n\n"
-        + menu_principal()
+        "Merci pour votre commande ! 🎉"
     )
     return texte, commande
 
@@ -101,18 +100,23 @@ def traiter_message(numero_client, message_client):
     print(f"📍 État : {etat} | Message : {message}")
 
     # ═══════════════════════════════
-    # BOUTONS GLOBAUX (accessibles depuis n'importe quel état)
+    # BOUTONS GLOBAUX
     # ═══════════════════════════════
     if message == "RETOUR_CATEGORIES":
         texte, _ = menu_categories()
         set_etat(numero_client, "CATALOGUE")
         return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
-    if message == "VOIR_PANIER":
+    if message in ("MENU_PANIER", "VOIR_PANIER"):
         panier = get_panier(numero_client)
         if not panier or not panier.get("produits"):
-            return {"texte": "Votre panier est vide.\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
-        texte = "🛒 Votre panier :\n\n"
+            return {
+                "texte": "Votre panier est vide. 🛒",
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
+        texte = "🛒 *Votre panier :*\n\n"
         for i, p in enumerate(panier["produits"], 1):
             texte += f"{i}. {p['quantite']}x {p['nom']} — {p['prix']} FCFA\n"
         boutons = [
@@ -122,6 +126,15 @@ def traiter_message(numero_client, message_client):
         ]
         set_etat(numero_client, "PANIER")
         return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
+
+    if message == "MENU_CATALOGUE":
+        texte, _ = menu_categories()
+        set_etat(numero_client, "CATALOGUE")
+        return {"texte": texte, "produits": [], "boutons": [], "commande": None}
+
+    if message == "MENU_LIVRAISON":
+        set_etat(numero_client, "LIVRAISON")
+        return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
 
     if message.startswith("PAGE_SUIVANTE_"):
         parties = message.split("_")
@@ -148,8 +161,13 @@ def traiter_message(numero_client, message_client):
         elif message == "3":
             panier = get_panier(numero_client)
             if not panier or not panier.get("produits"):
-                return {"texte": "Votre panier est vide.\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
-            texte = "🛒 Votre panier :\n\n"
+                return {
+                    "texte": "Votre panier est vide. 🛒",
+                    "produits": [],
+                    "boutons": boutons_menu_principal(),
+                    "commande": None
+                }
+            texte = "🛒 *Votre panier :*\n\n"
             for i, p in enumerate(panier["produits"], 1):
                 texte += f"{i}. {p['quantite']}x {p['nom']} — {p['prix']} FCFA\n"
             boutons = [
@@ -161,7 +179,12 @@ def traiter_message(numero_client, message_client):
             return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
 
         else:
-            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": menu_principal(),
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
     # ═══════════════════════════════
     # ÉTAT : CATALOGUE
@@ -171,7 +194,12 @@ def traiter_message(numero_client, message_client):
 
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": menu_principal(),
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
         if message.isdigit():
             index = int(message) - 1
@@ -180,7 +208,9 @@ def traiter_message(numero_client, message_client):
                 produits = get_produits_categorie(cat["id"])
 
                 if not produits:
-                    return {"texte": "Aucun produit disponible.\n\n0. Retour", "produits": [], "boutons": [], "commande": None}
+                    return {"texte": "Aucun produit disponible.", "produits": [], "boutons": [
+                        {"id": "RETOUR_CATEGORIES", "titre": "🔙 Catégories"}
+                    ], "commande": None}
 
                 texte, produits_page, boutons = construire_page_produits(produits, 0, cat["id"])
                 set_etat(numero_client, f"PRODUITS_{cat['id']}_PAGE_0")
@@ -203,7 +233,6 @@ def traiter_message(numero_client, message_client):
             set_etat(numero_client, "CATALOGUE")
             return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
-        # Ajouter au panier
         message_upper = message.upper()
         if message_upper.startswith("A") and message_upper[1:].isdigit():
             index = int(message_upper[1:]) - 1
@@ -212,16 +241,16 @@ def traiter_message(numero_client, message_client):
                 ajouter_au_panier(numero_client, produit)
                 texte = (
                     f"✅ *{produit['nom']}* ajouté au panier.\n"
-                    f"Prix : {produit['prix']} FCFA\n\n"
+                    f"Prix : {produit['prix']} FCFA"
                 )
                 boutons = [
                     {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
                     {"id": "CONFIRMER_COMMANDE", "titre": "✅ Commander"},
+                    {"id": "MENU_PANIER", "titre": "🛒 Mon panier"},
                 ]
                 set_etat(numero_client, "CONTINUER")
                 return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
 
-        # Affichage par défaut de la page actuelle
         texte, produits_page, boutons = construire_page_produits(produits, page, categorie_id)
         return {"texte": texte, "produits": produits_page, "boutons": boutons, "commande": None}
 
@@ -240,7 +269,12 @@ def traiter_message(numero_client, message_client):
                 zone = detecter_zone_par_choix(panier.get("zone_choix", ""))
                 frais = zone["frais"] if zone else 0
                 texte, commande = confirmer_commande(numero_client, panier, panier["quartier"], frais)
-                return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
+                return {
+                    "texte": texte,
+                    "produits": [],
+                    "boutons": boutons_menu_principal(),
+                    "commande": commande
+                }
             else:
                 set_etat(numero_client, "QUARTIER_COMMANDE")
                 return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
@@ -248,6 +282,7 @@ def traiter_message(numero_client, message_client):
         return {"texte": "Choisissez une option.", "produits": [], "boutons": [
             {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
             {"id": "CONFIRMER_COMMANDE", "titre": "✅ Commander"},
+            {"id": "MENU_PANIER", "titre": "🛒 Mon panier"},
         ], "commande": None}
 
     # ═══════════════════════════════
@@ -256,7 +291,12 @@ def traiter_message(numero_client, message_client):
     elif etat == "QUARTIER_COMMANDE":
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": menu_principal(),
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
         zone = detecter_zone_par_choix(message)
         if not zone:
@@ -266,7 +306,12 @@ def traiter_message(numero_client, message_client):
         panier = get_panier(numero_client)
         frais = zone["frais"]
         texte, commande = confirmer_commande(numero_client, panier, zone["nom"], frais)
-        return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
+        return {
+            "texte": texte,
+            "produits": [],
+            "boutons": boutons_menu_principal(),
+            "commande": commande
+        }
 
     # ═══════════════════════════════
     # ÉTAT : LIVRAISON
@@ -274,7 +319,12 @@ def traiter_message(numero_client, message_client):
     elif etat == "LIVRAISON":
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": menu_principal(),
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
         zone = detecter_zone_par_choix(message)
         if not zone:
@@ -282,9 +332,9 @@ def traiter_message(numero_client, message_client):
 
         set_etat(numero_client, "MENU")
         return {
-            "texte": f"Frais de livraison *{zone['nom']}* : {zone['frais']} FCFA\n\n" + menu_principal(),
+            "texte": f"Frais de livraison *{zone['nom']}* : {zone['frais']} FCFA",
             "produits": [],
-            "boutons": [],
+            "boutons": boutons_menu_principal(),
             "commande": None
         }
 
@@ -294,7 +344,12 @@ def traiter_message(numero_client, message_client):
     elif etat == "PANIER":
         if message in ("0", "RETOUR_CATEGORIES"):
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": menu_principal(),
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
         if message in ("1", "CONFIRMER_COMMANDE"):
             panier = get_panier(numero_client)
@@ -302,7 +357,12 @@ def traiter_message(numero_client, message_client):
                 zone = detecter_zone_par_choix(panier.get("zone_choix", ""))
                 frais = zone["frais"] if zone else 0
                 texte, commande = confirmer_commande(numero_client, panier, panier["quartier"], frais)
-                return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
+                return {
+                    "texte": texte,
+                    "produits": [],
+                    "boutons": boutons_menu_principal(),
+                    "commande": commande
+                }
             else:
                 set_etat(numero_client, "QUARTIER_COMMANDE")
                 return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
@@ -315,7 +375,12 @@ def traiter_message(numero_client, message_client):
         elif message in ("3", "VIDER_PANIER"):
             vider_panier(numero_client)
             set_etat(numero_client, "MENU")
-            return {"texte": "Panier vidé. 🗑️\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
+            return {
+                "texte": "Panier vidé. 🗑️",
+                "produits": [],
+                "boutons": boutons_menu_principal(),
+                "commande": None
+            }
 
         return {"texte": "Choisissez une option.", "produits": [], "boutons": [
             {"id": "CONFIRMER_COMMANDE", "titre": "✅ Confirmer"},
@@ -328,4 +393,9 @@ def traiter_message(numero_client, message_client):
     # ═══════════════════════════════
     else:
         set_etat(numero_client, "MENU")
-        return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
+        return {
+            "texte": menu_principal(),
+            "produits": [],
+            "boutons": boutons_menu_principal(),
+            "commande": None
+        }
