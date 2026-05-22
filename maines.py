@@ -1,9 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from bot.router import traiter_message
-from services.whatsapp import envoyer_message, envoyer_image
+from services.whatsapp import envoyer_message, envoyer_image, envoyer_images_avec_delai, envoyer_boutons
 from config import WHATSAPP_VERIFY_TOKEN, NUMERO_PROPRIO
-from services.whatsapp import envoyer_message, envoyer_image, envoyer_images_avec_delai
 
 app = FastAPI()
 
@@ -45,13 +44,28 @@ async def webhook(request: Request):
         if message["type"] == "text":
             texte = message["text"]["body"]
         elif message["type"] == "interactive":
-            texte = message["interactive"]["button_reply"]["id"]
+            interactive = message["interactive"]
+            if interactive["type"] == "button_reply":
+                texte = interactive["button_reply"]["id"]
+            elif interactive["type"] == "list_reply":
+                texte = interactive["list_reply"]["id"]
+            else:
+                return {"status": "ok"}
         else:
             return {"status": "ok"}
 
         resultat = traiter_message(numero, texte)
 
-        await envoyer_message(numero, resultat["texte"])
+        # Envoyer le texte principal
+        if resultat.get("texte"):
+            await envoyer_message(numero, resultat["texte"])
+
+        # Envoyer les images avec délai
+        await envoyer_images_avec_delai(numero, resultat.get("produits", []))
+
+        # Envoyer les boutons de navigation si présents
+        if resultat.get("boutons"):
+            await envoyer_boutons(numero, "Que voulez-vous faire ?", resultat["boutons"])
 
         # Alerte propriétaire si commande confirmée
         if resultat.get("commande"):
@@ -67,11 +81,8 @@ async def webhook(request: Request):
             )
             await envoyer_message(NUMERO_PROPRIO, alerte)
             for produit in c.get("produits", []):
-                 if produit.get("lien_photo"):
-                     await envoyer_image(NUMERO_PROPRIO, produit["lien_photo"], produit["nom"])
-
-        await envoyer_images_avec_delai(numero, resultat.get("produits", []))
-                
+                if produit.get("lien_photo"):
+                    await envoyer_image(NUMERO_PROPRIO, produit["lien_photo"], produit["nom"])
 
     except Exception as e:
         print(f"Erreur webhook : {e}")

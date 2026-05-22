@@ -49,6 +49,7 @@ def construire_page_produits(produits, page, categorie_id):
     fin = debut + PRODUITS_PAR_PAGE
     total_pages = (len(produits) + PRODUITS_PAR_PAGE - 1) // PRODUITS_PAR_PAGE
     produits_page = produits[debut:fin]
+    a_suivant = page + 1 < total_pages
 
     texte = (
         f"Page {page + 1}/{total_pages} "
@@ -59,11 +60,14 @@ def construire_page_produits(produits, page, categorie_id):
     for i, p in enumerate(produits_page, debut + 1):
         texte += f"{i}. {p['nom']} — {p['prix']} FCFA\n"
 
-    if page + 1 < total_pages:
-        texte += "\nTapez *SUITE* pour voir plus de produits\n"
-    texte += "\n0. Retour"
+    # Boutons de navigation
+    boutons = []
+    if a_suivant:
+        boutons.append({"id": f"PAGE_SUIVANTE_{categorie_id}_{page + 1}", "titre": "➡️ Page suivante"})
+    boutons.append({"id": "VOIR_PANIER", "titre": "🛒 Mon panier"})
+    boutons.append({"id": "RETOUR_CATEGORIES", "titre": "🔙 Catégories"})
 
-    return texte, produits_page
+    return texte, produits_page, boutons[:3]
 
 
 def confirmer_commande(numero_client, panier, zone_nom, frais):
@@ -97,31 +101,67 @@ def traiter_message(numero_client, message_client):
     print(f"📍 État : {etat} | Message : {message}")
 
     # ═══════════════════════════════
+    # BOUTONS GLOBAUX (accessibles depuis n'importe quel état)
+    # ═══════════════════════════════
+    if message == "RETOUR_CATEGORIES":
+        texte, _ = menu_categories()
+        set_etat(numero_client, "CATALOGUE")
+        return {"texte": texte, "produits": [], "boutons": [], "commande": None}
+
+    if message == "VOIR_PANIER":
+        panier = get_panier(numero_client)
+        if not panier or not panier.get("produits"):
+            return {"texte": "Votre panier est vide.\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
+        texte = "🛒 Votre panier :\n\n"
+        for i, p in enumerate(panier["produits"], 1):
+            texte += f"{i}. {p['quantite']}x {p['nom']} — {p['prix']} FCFA\n"
+        boutons = [
+            {"id": "CONFIRMER_COMMANDE", "titre": "✅ Confirmer"},
+            {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
+            {"id": "VIDER_PANIER", "titre": "🗑️ Vider panier"},
+        ]
+        set_etat(numero_client, "PANIER")
+        return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
+
+    if message.startswith("PAGE_SUIVANTE_"):
+        parties = message.split("_")
+        categorie_id = int(parties[2])
+        page = int(parties[3])
+        produits = get_produits_categorie(categorie_id)
+        texte, produits_page, boutons = construire_page_produits(produits, page, categorie_id)
+        set_etat(numero_client, f"PRODUITS_{categorie_id}_PAGE_{page}")
+        return {"texte": texte, "produits": produits_page, "boutons": boutons, "commande": None}
+
+    # ═══════════════════════════════
     # ÉTAT : MENU PRINCIPAL
     # ═══════════════════════════════
     if etat == "MENU":
         if message == "1":
             texte, _ = menu_categories()
             set_etat(numero_client, "CATALOGUE")
-            return {"texte": texte, "produits": [], "commande": None}
+            return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
         elif message == "2":
             set_etat(numero_client, "LIVRAISON")
-            return {"texte": menu_zones(), "produits": [], "commande": None}
+            return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
 
         elif message == "3":
             panier = get_panier(numero_client)
             if not panier or not panier.get("produits"):
-                return {"texte": "Votre panier est vide.\n\n" + menu_principal(), "produits": [], "commande": None}
+                return {"texte": "Votre panier est vide.\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
             texte = "🛒 Votre panier :\n\n"
             for i, p in enumerate(panier["produits"], 1):
                 texte += f"{i}. {p['quantite']}x {p['nom']} — {p['prix']} FCFA\n"
-            texte += "\n1. Confirmer la commande\n2. Continuer les achats\n3. Vider le panier\n\n0. Retour"
+            boutons = [
+                {"id": "CONFIRMER_COMMANDE", "titre": "✅ Confirmer"},
+                {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
+                {"id": "VIDER_PANIER", "titre": "🗑️ Vider panier"},
+            ]
             set_etat(numero_client, "PANIER")
-            return {"texte": texte, "produits": [], "commande": None}
+            return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
 
         else:
-            return {"texte": menu_principal(), "produits": [], "commande": None}
+            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
 
     # ═══════════════════════════════
     # ÉTAT : CATALOGUE
@@ -131,7 +171,7 @@ def traiter_message(numero_client, message_client):
 
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "commande": None}
+            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
 
         if message.isdigit():
             index = int(message) - 1
@@ -140,14 +180,14 @@ def traiter_message(numero_client, message_client):
                 produits = get_produits_categorie(cat["id"])
 
                 if not produits:
-                    return {"texte": "Aucun produit disponible.\n\n0. Retour", "produits": [], "commande": None}
+                    return {"texte": "Aucun produit disponible.\n\n0. Retour", "produits": [], "boutons": [], "commande": None}
 
-                texte, produits_page = construire_page_produits(produits, 0, cat["id"])
+                texte, produits_page, boutons = construire_page_produits(produits, 0, cat["id"])
                 set_etat(numero_client, f"PRODUITS_{cat['id']}_PAGE_0")
-                return {"texte": texte, "produits": produits_page, "commande": None}
+                return {"texte": texte, "produits": produits_page, "boutons": boutons, "commande": None}
 
         texte, _ = menu_categories()
-        return {"texte": texte, "produits": [], "commande": None}
+        return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
     # ═══════════════════════════════
     # ÉTAT : PRODUITS D'UNE CATÉGORIE
@@ -157,23 +197,11 @@ def traiter_message(numero_client, message_client):
         categorie_id = int(parties[1])
         page = int(parties[3]) if len(parties) > 3 else 0
         produits = get_produits_categorie(categorie_id)
-        total_pages = (len(produits) + PRODUITS_PAR_PAGE - 1) // PRODUITS_PAR_PAGE
 
         if message == "0":
             texte, _ = menu_categories()
             set_etat(numero_client, "CATALOGUE")
-            return {"texte": texte, "produits": [], "commande": None}
-
-        # Navigation page suivante
-        if message.upper() == "SUITE":
-            nouvelle_page = page + 1
-            if nouvelle_page < total_pages:
-                texte, produits_page = construire_page_produits(produits, nouvelle_page, categorie_id)
-                set_etat(numero_client, f"PRODUITS_{categorie_id}_PAGE_{nouvelle_page}")
-                return {"texte": texte, "produits": produits_page, "commande": None}
-            else:
-                texte, produits_page = construire_page_produits(produits, page, categorie_id)
-                return {"texte": "Vous êtes déjà à la dernière page.\n\n" + texte, "produits": produits_page, "commande": None}
+            return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
         # Ajouter au panier
         message_upper = message.upper()
@@ -185,38 +213,42 @@ def traiter_message(numero_client, message_client):
                 texte = (
                     f"✅ *{produit['nom']}* ajouté au panier.\n"
                     f"Prix : {produit['prix']} FCFA\n\n"
-                    "1. Voir d'autres produits\n"
-                    "2. Confirmer ma commande\n\n"
-                    "0. Retour"
                 )
+                boutons = [
+                    {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
+                    {"id": "CONFIRMER_COMMANDE", "titre": "✅ Commander"},
+                ]
                 set_etat(numero_client, "CONTINUER")
-                return {"texte": texte, "produits": [], "commande": None}
+                return {"texte": texte, "produits": [], "boutons": boutons, "commande": None}
 
         # Affichage par défaut de la page actuelle
-        texte, produits_page = construire_page_produits(produits, page, categorie_id)
-        return {"texte": texte, "produits": produits_page, "commande": None}
+        texte, produits_page, boutons = construire_page_produits(produits, page, categorie_id)
+        return {"texte": texte, "produits": produits_page, "boutons": boutons, "commande": None}
 
     # ═══════════════════════════════
     # ÉTAT : CONTINUER OU CONFIRMER
     # ═══════════════════════════════
     elif etat == "CONTINUER":
-        if message == "0" or message == "1":
+        if message in ("0", "1", "CONTINUER_ACHATS"):
             texte, _ = menu_categories()
             set_etat(numero_client, "CATALOGUE")
-            return {"texte": texte, "produits": [], "commande": None}
+            return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
-        elif message == "2":
+        elif message in ("2", "CONFIRMER_COMMANDE"):
             panier = get_panier(numero_client)
             if panier and panier.get("quartier"):
                 zone = detecter_zone_par_choix(panier.get("zone_choix", ""))
                 frais = zone["frais"] if zone else 0
                 texte, commande = confirmer_commande(numero_client, panier, panier["quartier"], frais)
-                return {"texte": texte, "produits": [], "commande": commande}
+                return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
             else:
                 set_etat(numero_client, "QUARTIER_COMMANDE")
-                return {"texte": menu_zones(), "produits": [], "commande": None}
+                return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
 
-        return {"texte": "Tapez 1 pour continuer ou 2 pour confirmer.\n\n0. Retour", "produits": [], "commande": None}
+        return {"texte": "Choisissez une option.", "produits": [], "boutons": [
+            {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
+            {"id": "CONFIRMER_COMMANDE", "titre": "✅ Commander"},
+        ], "commande": None}
 
     # ═══════════════════════════════
     # ÉTAT : QUARTIER POUR COMMANDE
@@ -224,17 +256,17 @@ def traiter_message(numero_client, message_client):
     elif etat == "QUARTIER_COMMANDE":
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "commande": None}
+            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
 
         zone = detecter_zone_par_choix(message)
         if not zone:
-            return {"texte": "Tapez 1, 2, 3 ou 4.\n\n" + menu_zones(), "produits": [], "commande": None}
+            return {"texte": "Tapez 1, 2, 3 ou 4.\n\n" + menu_zones(), "produits": [], "boutons": [], "commande": None}
 
         mettre_a_jour_quartier(numero_client, zone["nom"])
         panier = get_panier(numero_client)
         frais = zone["frais"]
         texte, commande = confirmer_commande(numero_client, panier, zone["nom"], frais)
-        return {"texte": texte, "produits": [], "commande": commande}
+        return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
 
     # ═══════════════════════════════
     # ÉTAT : LIVRAISON
@@ -242,16 +274,17 @@ def traiter_message(numero_client, message_client):
     elif etat == "LIVRAISON":
         if message == "0":
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "commande": None}
+            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
 
         zone = detecter_zone_par_choix(message)
         if not zone:
-            return {"texte": "Tapez 1, 2, 3 ou 4.\n\n" + menu_zones(), "produits": [], "commande": None}
+            return {"texte": "Tapez 1, 2, 3 ou 4.\n\n" + menu_zones(), "produits": [], "boutons": [], "commande": None}
 
         set_etat(numero_client, "MENU")
         return {
             "texte": f"Frais de livraison *{zone['nom']}* : {zone['frais']} FCFA\n\n" + menu_principal(),
             "produits": [],
+            "boutons": [],
             "commande": None
         }
 
@@ -259,36 +292,40 @@ def traiter_message(numero_client, message_client):
     # ÉTAT : PANIER
     # ═══════════════════════════════
     elif etat == "PANIER":
-        if message == "0":
+        if message in ("0", "RETOUR_CATEGORIES"):
             set_etat(numero_client, "MENU")
-            return {"texte": menu_principal(), "produits": [], "commande": None}
+            return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
 
-        if message == "1":
+        if message in ("1", "CONFIRMER_COMMANDE"):
             panier = get_panier(numero_client)
             if panier and panier.get("quartier"):
                 zone = detecter_zone_par_choix(panier.get("zone_choix", ""))
                 frais = zone["frais"] if zone else 0
                 texte, commande = confirmer_commande(numero_client, panier, panier["quartier"], frais)
-                return {"texte": texte, "produits": [], "commande": commande}
+                return {"texte": texte, "produits": [], "boutons": [], "commande": commande}
             else:
                 set_etat(numero_client, "QUARTIER_COMMANDE")
-                return {"texte": menu_zones(), "produits": [], "commande": None}
+                return {"texte": menu_zones(), "produits": [], "boutons": [], "commande": None}
 
-        elif message == "2":
+        elif message in ("2", "CONTINUER_ACHATS"):
             texte, _ = menu_categories()
             set_etat(numero_client, "CATALOGUE")
-            return {"texte": texte, "produits": [], "commande": None}
+            return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
-        elif message == "3":
+        elif message in ("3", "VIDER_PANIER"):
             vider_panier(numero_client)
             set_etat(numero_client, "MENU")
-            return {"texte": "Panier vidé. 🗑️\n\n" + menu_principal(), "produits": [], "commande": None}
+            return {"texte": "Panier vidé. 🗑️\n\n" + menu_principal(), "produits": [], "boutons": [], "commande": None}
 
-        return {"texte": "Tapez 1, 2 ou 3.\n\n0. Retour", "produits": [], "commande": None}
+        return {"texte": "Choisissez une option.", "produits": [], "boutons": [
+            {"id": "CONFIRMER_COMMANDE", "titre": "✅ Confirmer"},
+            {"id": "CONTINUER_ACHATS", "titre": "🛍️ Continuer"},
+            {"id": "VIDER_PANIER", "titre": "🗑️ Vider panier"},
+        ], "commande": None}
 
     # ═══════════════════════════════
     # DÉFAUT
     # ═══════════════════════════════
     else:
         set_etat(numero_client, "MENU")
-        return {"texte": menu_principal(), "produits": [], "commande": None}
+        return {"texte": menu_principal(), "produits": [], "boutons": [], "commande": None}
