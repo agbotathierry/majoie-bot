@@ -236,7 +236,7 @@ def traiter_message(numero_client, message_client):
             set_etat(numero_client, "CATALOGUE")
             return {"texte": texte, "produits": [], "boutons": [], "commande": None}
 
-        message_upper = message.upper()
+        message_upper = message.upper().replace(" ", "")
         if message_upper.startswith("A") and message_upper[1:].isdigit():
             index = int(message_upper[1:]) - 1
             if 0 <= index < len(produits):
