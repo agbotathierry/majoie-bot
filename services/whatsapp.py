@@ -99,4 +99,4 @@ async def envoyer_image(numero, image_url, caption=""):
     }
     async with httpx.AsyncClient() as client:
         r = await client.post(WHATSAPP_API_URL, json=payload, headers=HEADERS)
-        print(f"📤 Image : {r.status_code}")
+        print(f"📤 Image : {r.status_code} — {r.text}")
