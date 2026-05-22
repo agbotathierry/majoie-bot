@@ -32,7 +32,7 @@ def boutons_menu_principal():
 
 
 def menu_principal():
-    return "Bonjour ! 👋 Bienvenue chez *Majoie Mercerie*.\n\nQue voulez-vous faire ?"
+    return "Bonjour ! 👋 Bienvenue chez *Majoie Mercerie*.\n\n"
 
 
 def menu_categories():
