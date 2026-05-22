@@ -102,17 +102,19 @@ async def envoyer_image(numero, image_url, caption=""):
         r = await client.post(WHATSAPP_API_URL, json=payload, headers=HEADERS)
         print(f"📤 Image : {r.status_code} — {r.text}")
 
+def optimiser_url_cloudinary(url):
+    """Compresse l'image pour respecter la limite WhatsApp (max 5MB)"""
+    if "res.cloudinary.com" in url and "/image/upload/" in url:
+        return url.replace("/image/upload/", "/image/upload/q_auto,f_jpg,w_1200/")
+    return url
 
 async def envoyer_images_avec_delai(numero, produits, delai=1.5):
-    """
-    Envoie une liste de produits avec photos en respectant un délai
-    entre chaque envoi pour éviter le rate limit WhatsApp.
-    """
     for produit in produits:
         if produit.get("lien_photo"):
+            url = optimiser_url_cloudinary(produit["lien_photo"])
             await envoyer_image(
                 numero,
-                produit["lien_photo"],
+                url,
                 f"{produit['nom']} — {produit['prix']} FCFA"
             )
             await asyncio.sleep(delai)
