@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 from bot.router import traiter_message
 from services.whatsapp import envoyer_message, envoyer_image
 from config import WHATSAPP_VERIFY_TOKEN, NUMERO_PROPRIO
+from services.whatsapp import envoyer_message, envoyer_image, envoyer_images_avec_delai
 
 app = FastAPI()
 
@@ -69,13 +70,8 @@ async def webhook(request: Request):
                  if produit.get("lien_photo"):
                      await envoyer_image(NUMERO_PROPRIO, produit["lien_photo"], produit["nom"])
 
-        for produit in resultat.get("produits", []):
-            if produit.get("lien_photo"):
-                await envoyer_image(
-                    numero,
-                    produit["lien_photo"],
-                    f"{produit['nom']} — {produit['prix']} FCFA"
-                )
+        await envoyer_images_avec_delai(numero, resultat.get("produits", []))
+                
 
     except Exception as e:
         print(f"Erreur webhook : {e}")

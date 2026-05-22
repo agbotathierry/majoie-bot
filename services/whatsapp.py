@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from config import WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID
 
@@ -100,3 +101,18 @@ async def envoyer_image(numero, image_url, caption=""):
     async with httpx.AsyncClient() as client:
         r = await client.post(WHATSAPP_API_URL, json=payload, headers=HEADERS)
         print(f"📤 Image : {r.status_code} — {r.text}")
+
+
+async def envoyer_images_avec_delai(numero, produits, delai=1.5):
+    """
+    Envoie une liste de produits avec photos en respectant un délai
+    entre chaque envoi pour éviter le rate limit WhatsApp.
+    """
+    for produit in produits:
+        if produit.get("lien_photo"):
+            await envoyer_image(
+                numero,
+                produit["lien_photo"],
+                f"{produit['nom']} — {produit['prix']} FCFA"
+            )
+            await asyncio.sleep(delai)

@@ -10,6 +10,8 @@ from services.orders import creer_commande_structuree
 from bot.states import get_etat, set_etat
 from database import supabase
 
+PRODUITS_PAR_PAGE = 5
+
 
 def get_categories():
     res = supabase.table("CATEGORIE").select("*").order("id").execute()
@@ -39,6 +41,29 @@ def menu_categories():
         texte += f"{i}. {cat['nom']}\n"
     texte += "\n0. Retour"
     return texte, categories
+
+
+def construire_page_produits(produits, page, categorie_id):
+    """Construit le texte et la liste de produits pour une page donnée."""
+    debut = page * PRODUITS_PAR_PAGE
+    fin = debut + PRODUITS_PAR_PAGE
+    total_pages = (len(produits) + PRODUITS_PAR_PAGE - 1) // PRODUITS_PAR_PAGE
+    produits_page = produits[debut:fin]
+
+    texte = (
+        f"Page {page + 1}/{total_pages} "
+        f"({debut + 1}-{min(fin, len(produits))} sur {len(produits)} produits)\n\n"
+        f"Tapez *A + numéro* pour ajouter au panier\n"
+        f"Exemple : A{debut + 1}, A{debut + 2}...\n\n"
+    )
+    for i, p in enumerate(produits_page, debut + 1):
+        texte += f"{i}. {p['nom']} — {p['prix']} FCFA\n"
+
+    if page + 1 < total_pages:
+        texte += "\nTapez *SUITE* pour voir plus de produits\n"
+    texte += "\n0. Retour"
+
+    return texte, produits_page
 
 
 def confirmer_commande(numero_client, panier, zone_nom, frais):
@@ -117,14 +142,9 @@ def traiter_message(numero_client, message_client):
                 if not produits:
                     return {"texte": "Aucun produit disponible.\n\n0. Retour", "produits": [], "commande": None}
 
-                texte = (
-                    f"*{cat['nom']}* — {len(produits)} produits\n\n"
-                    f"Tapez *A + numéro* pour ajouter au panier\n"
-                    f"Exemple : A1, A2, A3...\n\n"
-                    f"0. Retour"
-                )
-                set_etat(numero_client, f"PRODUITS_{cat['id']}")
-                return {"texte": texte, "produits": produits, "commande": None}
+                texte, produits_page = construire_page_produits(produits, 0, cat["id"])
+                set_etat(numero_client, f"PRODUITS_{cat['id']}_PAGE_0")
+                return {"texte": texte, "produits": produits_page, "commande": None}
 
         texte, _ = menu_categories()
         return {"texte": texte, "produits": [], "commande": None}
@@ -133,14 +153,29 @@ def traiter_message(numero_client, message_client):
     # ÉTAT : PRODUITS D'UNE CATÉGORIE
     # ═══════════════════════════════
     elif etat.startswith("PRODUITS_"):
-        categorie_id = int(etat.split("_")[1])
+        parties = etat.split("_")
+        categorie_id = int(parties[1])
+        page = int(parties[3]) if len(parties) > 3 else 0
         produits = get_produits_categorie(categorie_id)
+        total_pages = (len(produits) + PRODUITS_PAR_PAGE - 1) // PRODUITS_PAR_PAGE
 
         if message == "0":
             texte, _ = menu_categories()
             set_etat(numero_client, "CATALOGUE")
             return {"texte": texte, "produits": [], "commande": None}
 
+        # Navigation page suivante
+        if message.upper() == "SUITE":
+            nouvelle_page = page + 1
+            if nouvelle_page < total_pages:
+                texte, produits_page = construire_page_produits(produits, nouvelle_page, categorie_id)
+                set_etat(numero_client, f"PRODUITS_{categorie_id}_PAGE_{nouvelle_page}")
+                return {"texte": texte, "produits": produits_page, "commande": None}
+            else:
+                texte, produits_page = construire_page_produits(produits, page, categorie_id)
+                return {"texte": "Vous êtes déjà à la dernière page.\n\n" + texte, "produits": produits_page, "commande": None}
+
+        # Ajouter au panier
         message_upper = message.upper()
         if message_upper.startswith("A") and message_upper[1:].isdigit():
             index = int(message_upper[1:]) - 1
@@ -150,15 +185,16 @@ def traiter_message(numero_client, message_client):
                 texte = (
                     f"✅ *{produit['nom']}* ajouté au panier.\n"
                     f"Prix : {produit['prix']} FCFA\n\n"
-                    "Voulez-vous autre chose ?\n\n"
-                    "1. Oui, voir d'autres produits\n"
-                    "2. Non, confirmer ma commande\n\n"
+                    "1. Voir d'autres produits\n"
+                    "2. Confirmer ma commande\n\n"
                     "0. Retour"
                 )
                 set_etat(numero_client, "CONTINUER")
                 return {"texte": texte, "produits": [], "commande": None}
 
-        return {"texte": "Tapez A1, A2... pour ajouter au panier.\n\n0. Retour", "produits": produits, "commande": None}
+        # Affichage par défaut de la page actuelle
+        texte, produits_page = construire_page_produits(produits, page, categorie_id)
+        return {"texte": texte, "produits": produits_page, "commande": None}
 
     # ═══════════════════════════════
     # ÉTAT : CONTINUER OU CONFIRMER
