@@ -37,10 +37,13 @@ def menu_principal():
 
 def menu_categories():
     categories = get_categories()
-    texte = "Choisissez une catégorie : Exemple :1 pour voir les broderie de 2000F , 0 pour le retour a chaque fois \n\n"
+    texte = (
+        "🗂️ *Nos catégories*\n\n"
+        "Tapez le *numéro* de la catégorie qui vous intéresse.\n\n"
+    )
     for i, cat in enumerate(categories, 1):
         texte += f"{i}. {cat['nom']}\n"
-    texte += "\n0. Retour"
+    texte += "\n0️⃣ Tapez *0* pour revenir en arriere."
     return texte, categories
 
 
