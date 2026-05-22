@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+httpx
+groq
+supabase
+python-dotenv
+rapidfuzz
+cloudinary
