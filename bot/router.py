@@ -19,7 +19,7 @@ def get_categories():
 
 
 def get_produits_categorie(categorie_id):
-    res = supabase.table("produits").select("*").eq("categorie_id", categorie_id).eq("disponible", True).execute()
+    res = supabase.table("produits").select("*").eq("categorie_id", categorie_id).eq("disponible", True).order("id").execute()
     return res.data or []
 
 
