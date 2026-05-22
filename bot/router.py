@@ -10,7 +10,7 @@ from services.orders import creer_commande_structuree
 from bot.states import get_etat, set_etat
 from database import supabase
 
-PRODUITS_PAR_PAGE = 5
+PRODUITS_PAR_PAGE = 25
 
 
 def get_categories():
