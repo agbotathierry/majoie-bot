@@ -37,7 +37,7 @@ def menu_principal():
 
 def menu_categories():
     categories = get_categories()
-    texte = "Choisissez une catégorie :\n\n"
+    texte = "Choisissez une catégorie : Exemple :1 pour voir les broderie de 2000F , 0 pour le retour a chaque fois \n\n"
     for i, cat in enumerate(categories, 1):
         texte += f"{i}. {cat['nom']}\n"
     texte += "\n0. Retour"
